@@ -81,6 +81,9 @@ int main(int argc, char *argv[]) {
         //
 
         CryptoGuard::ProgramOptions options;
+        options.Parse(argc, argv);
+        std::print(" {}\n ", (int)(options.GetCommand()));
+
 
         CryptoGuard::CryptoGuardCtx cryptoCtx;
 
