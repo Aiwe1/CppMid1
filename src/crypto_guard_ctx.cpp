@@ -50,7 +50,6 @@ public:
 
     ~Impl() {
         EVP_CIPHER_CTX_free(ctx);
-        //std::print("String encoded successfully. Result: '{}'\n\n", output);
         EVP_cleanup();
     }
 
@@ -66,24 +65,26 @@ public:
         std::vector<unsigned char> inBuf(N);
         int outLen;
 
-        for(; !inStream.eof();) {
-            if (!inStream.read(reinterpret_cast<char*>(inBuf.data()), N)) {
-                throw std::runtime_error{"Read file error."};
+        try {
+            for(; !inStream.eof();) {
+                inStream.read(reinterpret_cast<char*>(inBuf.data()), N);
+
+                if (!EVP_CipherUpdate(ctx, outBuf.data(), &outLen, inBuf.data(), static_cast<int>(inStream.gcount()))) {
+                    throw (std::runtime_error("Encrypt update error."));
+                }
+                if (!outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen))
+                    throw (std::runtime_error("Write error."));
             }
-            if (!EVP_CipherUpdate(ctx, outBuf.data(), &outLen, inBuf.data(), static_cast<int>(inStream.gcount()))) {
-                throw (std::runtime_error("Encrypt update error."));
+
+            // Заканчиваем работу с cipher
+            if(!EVP_CipherFinal_ex(ctx, outBuf.data(), &outLen)) {
+                throw (std::runtime_error("Encrypt final error."));
             }
-            if (!outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen)) {
-                throw std::runtime_error{"Write file error."};
-            }
-        }
-        
-        // Заканчиваем работу с cipher
-        if(!EVP_CipherFinal_ex(ctx, outBuf.data(), &outLen)) {
-            throw (std::runtime_error("Encrypt final error."));
-        }
-        if (!outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen)) {
-            throw std::runtime_error{"Write file error."};
+            if (!outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen)) 
+                throw (std::runtime_error("Write error."));
+        } catch (...) {
+            outStream.clear();
+            throw;
         }
     }
 
@@ -99,24 +100,26 @@ public:
         std::vector<unsigned char> inBuf(N);
         int outLen;
 
-        for(; !inStream.eof();) {
-            if (!inStream.read(reinterpret_cast<char*>(inBuf.data()), N)) {
-                throw std::runtime_error{"Read file error."};
+        try {
+            for(; !inStream.eof();) {
+                inStream.read(reinterpret_cast<char*>(inBuf.data()), N);    
+
+                if (!EVP_DecryptUpdate(ctx, outBuf.data(), &outLen, inBuf.data(), static_cast<int>(inStream.gcount()))) {
+                    throw (std::runtime_error("Decrypt update error."));
+                }
+                if (!outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen))
+                    throw (std::runtime_error("Write error."));
             }
-            if (!EVP_DecryptUpdate(ctx, outBuf.data(), &outLen, inBuf.data(), static_cast<int>(inStream.gcount()))) {
-                throw (std::runtime_error("Decrypt update error."));
+
+            // Заканчиваем работу с cipher
+            if (!EVP_DecryptFinal_ex(ctx, outBuf.data(), &outLen)) {
+                throw std::runtime_error{"Decrypt final error."};
             }
-            if (!outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen)) {
-                throw std::runtime_error{"Write file error."};
-            }
-        }
-        
-        // Заканчиваем работу с cipher
-        if (!EVP_DecryptFinal_ex(ctx, outBuf.data(), &outLen)) {
-            throw std::runtime_error{"Decrypt final error."};
-        }
-        if (!outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen)) {
-            throw std::runtime_error{"Write file error."};
+            if (!outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen))
+                throw (std::runtime_error("Write error."));
+        } catch (...) {
+            outStream.clear();
+            throw;
         }
     }
 
@@ -140,9 +143,11 @@ public:
         std::vector<unsigned char> inBuf(N);
         
         for(; !inStream.eof();) {
-            if (!inStream.read(reinterpret_cast<char*>(inBuf.data()), N)) {
+            try {
+                inStream.read(reinterpret_cast<char*>(inBuf.data()), N);
+            } catch (...) {
                 EVP_MD_CTX_free(mdctx);
-                throw (std::runtime_error("Read file error."));
+                throw;
             }
             if (!EVP_DigestUpdate(mdctx, inBuf.data(), inStream.gcount())) {
                 EVP_MD_CTX_free(mdctx);
