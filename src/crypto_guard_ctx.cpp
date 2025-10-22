@@ -67,14 +67,24 @@ public:
         int outLen;
 
         for(; !inStream.eof();) {
-            inStream.read(reinterpret_cast<char*>(inBuf.data()), N);
-            EVP_CipherUpdate(ctx, outBuf.data(), &outLen, inBuf.data(), static_cast<int>(inStream.gcount()));
-            outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen);
+            if (!inStream.read(reinterpret_cast<char*>(inBuf.data()), N)) {
+                throw std::runtime_error{"Read file error."};
+            }
+            if (!EVP_CipherUpdate(ctx, outBuf.data(), &outLen, inBuf.data(), static_cast<int>(inStream.gcount()))) {
+                throw (std::runtime_error("Encrypt update error."));
+            }
+            if (!outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen)) {
+                throw std::runtime_error{"Write file error."};
+            }
         }
         
         // Заканчиваем работу с cipher
-        EVP_CipherFinal_ex(ctx, outBuf.data(), &outLen);
-        outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen);
+        if(!EVP_CipherFinal_ex(ctx, outBuf.data(), &outLen)) {
+            throw (std::runtime_error("Encrypt final error."));
+        }
+        if (!outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen)) {
+            throw std::runtime_error{"Write file error."};
+        }
     }
 
     void DecryptFile(std::iostream &inStream, std::iostream &outStream, std::string_view password) {
@@ -82,7 +92,7 @@ public:
         params.encrypt = 0;
 
         if (!EVP_DecryptInit_ex(ctx, params.cipher, nullptr, params.key.data(), params.iv.data())) {
-            throw std::runtime_error{"error Decrypt."};
+            throw std::runtime_error{"Decrypt init error."};
         }
 
         std::vector<unsigned char> outBuf(N + EVP_MAX_BLOCK_LENGTH);
@@ -90,14 +100,24 @@ public:
         int outLen;
 
         for(; !inStream.eof();) {
-            inStream.read(reinterpret_cast<char*>(inBuf.data()), N);
-            EVP_DecryptUpdate(ctx, outBuf.data(), &outLen, inBuf.data(), static_cast<int>(inStream.gcount()));
-            outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen);
+            if (!inStream.read(reinterpret_cast<char*>(inBuf.data()), N)) {
+                throw std::runtime_error{"Read file error."};
+            }
+            if (!EVP_DecryptUpdate(ctx, outBuf.data(), &outLen, inBuf.data(), static_cast<int>(inStream.gcount()))) {
+                throw (std::runtime_error("Decrypt update error."));
+            }
+            if (!outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen)) {
+                throw std::runtime_error{"Write file error."};
+            }
         }
         
         // Заканчиваем работу с cipher
-        EVP_DecryptFinal_ex(ctx, outBuf.data(), &outLen);
-        outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen);
+        if (!EVP_DecryptFinal_ex(ctx, outBuf.data(), &outLen)) {
+            throw std::runtime_error{"Decrypt final error."};
+        }
+        if (!outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen)) {
+            throw std::runtime_error{"Write file error."};
+        }
     }
 
     std::string CalculateChecksum(std::iostream &inStream) {
@@ -120,10 +140,20 @@ public:
         std::vector<unsigned char> inBuf(N);
         
         for(; !inStream.eof();) {
-            inStream.read(reinterpret_cast<char*>(inBuf.data()), N);
-            EVP_DigestUpdate(mdctx, inBuf.data(), inStream.gcount());
+            if (!inStream.read(reinterpret_cast<char*>(inBuf.data()), N)) {
+                EVP_MD_CTX_free(mdctx);
+                throw (std::runtime_error("Read file error."));
+            }
+            if (!EVP_DigestUpdate(mdctx, inBuf.data(), inStream.gcount())) {
+                EVP_MD_CTX_free(mdctx);
+                throw (std::runtime_error("Message digest update failed."));
+            }
         }
-        EVP_DigestFinal_ex(mdctx, md_value.data(), &md_len);
+
+        if (!EVP_DigestFinal_ex(mdctx, md_value.data(), &md_len)) {
+            EVP_MD_CTX_free(mdctx);
+            throw (std::runtime_error("Message digest finalization failed."));
+        }
 
         for (unsigned int i = 0; i < md_len; ++i) {
             res << std::hex << static_cast<int>(md_value[i]);
