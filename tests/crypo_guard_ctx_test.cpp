@@ -1,3 +1,4 @@
+#include <exception>
 #include <gtest/gtest.h>
 #include <string>
 #include "crypto_guard_ctx.h"
@@ -6,7 +7,23 @@ TEST(CryptoGuardCtx, SimpleCheckCTX) {
     EXPECT_EQ(1 + 1, 2); 
 }
 
-TEST(CryptoGuardCtx, TestInput) {
+TEST(CryptoGuardCtx, TestEncryptThrow) {
+    std::stringstream ssin("01234567890123456789");
+    std::stringstream ssout(std::ios_base::in);
+    
+    CryptoGuard::CryptoGuardCtx ctx;
+    ASSERT_THROW(ctx.EncryptFile(ssin, ssout, "12341234"), std::exception);
+}
+
+TEST(CryptoGuardCtx, TestDecryptThrow) {
+    std::stringstream ssin("01234567890123456789");
+    std::stringstream ssout(std::ios_base::in);
+    
+    CryptoGuard::CryptoGuardCtx ctx;
+    ASSERT_THROW(ctx.DecryptFile(ssin, ssout, "12341234");, std::exception);
+}
+
+TEST(CryptoGuardCtx, TestAll) {
     std::string res;
     std::string s;
     {
@@ -29,7 +46,7 @@ TEST(CryptoGuardCtx, TestInput) {
     EXPECT_EQ("01234567890123456789", s);
 }
 
-TEST(ryptoGuardCtx, TestChechsum1) {
+TEST(ryptoGuardCtx, TestChecksum1) {
     std::stringstream ssin("01234567890123456789");
     std::stringstream ssout;
     CryptoGuard::CryptoGuardCtx ctx;
