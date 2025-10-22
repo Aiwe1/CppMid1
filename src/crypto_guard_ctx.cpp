@@ -1,8 +1,11 @@
+#include <ios>
 #include <openssl/evp.h>
 #include <array>
+#include <stdexcept>
 #include <string>
 #include <vector>
 #include <iostream>
+#include <sstream>
 
 #include "crypto_guard_ctx.h"
 
@@ -60,35 +63,74 @@ public:
         }
 
         std::vector<unsigned char> outBuf(N + EVP_MAX_BLOCK_LENGTH);
-        std::vector<unsigned char> inBuf;
-        inBuf.reserve(N);
+        std::vector<unsigned char> inBuf(N);
         int outLen;
 
         for(; !inStream.eof();) {
-            inBuf.clear();
-            unsigned char c;
-            for (int i = 0; i < N && inStream >> c;  ++i) {
-                inBuf.push_back(c);
-            }
-
-            EVP_CipherUpdate(ctx, outBuf.data(), &outLen, inBuf.data(), static_cast<int>(inBuf.size()));
-            for (int i = 0; i < outLen; ++i)
-                outStream << outBuf[i];
+            inStream.read(reinterpret_cast<char*>(inBuf.data()), N);
+            EVP_CipherUpdate(ctx, outBuf.data(), &outLen, inBuf.data(), static_cast<int>(inStream.gcount()));
+            outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen);
         }
         
         // Заканчиваем работу с cipher
         EVP_CipherFinal_ex(ctx, outBuf.data(), &outLen);
-        for (int i = 0; i < outLen; ++i)
-              outStream << outBuf[i];
+        outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen);
     }
 
     void DecryptFile(std::iostream &inStream, std::iostream &outStream, std::string_view password) {
+        params = CreateChiperParamsFromPassword(password);
+        params.encrypt = 0;
 
+        if (!EVP_DecryptInit_ex(ctx, params.cipher, nullptr, params.key.data(), params.iv.data())) {
+            throw std::runtime_error{"error Decrypt."};
+        }
 
+        std::vector<unsigned char> outBuf(N + EVP_MAX_BLOCK_LENGTH);
+        std::vector<unsigned char> inBuf(N);
+        int outLen;
+
+        for(; !inStream.eof();) {
+            inStream.read(reinterpret_cast<char*>(inBuf.data()), N);
+            EVP_DecryptUpdate(ctx, outBuf.data(), &outLen, inBuf.data(), static_cast<int>(inStream.gcount()));
+            outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen);
+        }
+        
+        // Заканчиваем работу с cipher
+        EVP_DecryptFinal_ex(ctx, outBuf.data(), &outLen);
+        outStream.write(reinterpret_cast<char*>(outBuf.data()), outLen);
     }
 
     std::string CalculateChecksum(std::iostream &inStream) {
-        return "NOT_IMPLEMENTED"; 
+        std::stringstream res;
+
+        unsigned int md_len;
+        EVP_MD_CTX* mdctx;
+        const EVP_MD* md;
+        md = EVP_get_digestbyname("sha256");
+        mdctx = EVP_MD_CTX_new();
+        if (mdctx == nullptr) {
+            throw (std::runtime_error("Message digest create failed."));
+        }
+
+        if (!EVP_DigestInit_ex(mdctx, md, NULL)) {
+            EVP_MD_CTX_free(mdctx);
+            throw (std::runtime_error("Message digest initialization failed."));
+        }
+        std::vector<unsigned char> md_value(EVP_MAX_MD_SIZE); 
+        std::vector<unsigned char> inBuf(N);
+        
+        for(; !inStream.eof();) {
+            inStream.read(reinterpret_cast<char*>(inBuf.data()), N);
+            EVP_DigestUpdate(mdctx, inBuf.data(), inStream.gcount());
+        }
+        EVP_DigestFinal_ex(mdctx, md_value.data(), &md_len);
+
+        for (unsigned int i = 0; i < md_len; ++i) {
+            res << std::hex << static_cast<int>(md_value[i]);
+        }
+        
+        EVP_MD_CTX_free(mdctx);
+        return res.str(); 
     }
 private:
     const int N = 1024;

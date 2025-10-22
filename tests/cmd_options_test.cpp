@@ -2,11 +2,7 @@
 #include <string>
 #include "cmd_options.h"
 
-//TEST(TestComponentName, SimpleCheck) { EXPECT_EQ(1 + 1, 2); }
-
-TEST(ProgramOptions, TestName) { 
-    EXPECT_EQ(1 + 1, 2); 
-}
+TEST(TestComponentName, SimpleCheckCMD) { EXPECT_EQ(1 + 1, 2); }
 
 TEST(ProgramOptions, TestCommand) {
     char arg1[] = {"name"};
