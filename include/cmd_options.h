@@ -2,6 +2,7 @@
 
 #include <boost/program_options.hpp>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 
 namespace CryptoGuard {
